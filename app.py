@@ -7,24 +7,20 @@ st.title("🌱 Mein Pflanzen-Dashboard")
 
 conn = psycopg2.connect(st.secrets["DATABASE_URL"])
 
-# 1. Registerkarten erstellen
-tab1, tab2 = st.tabs(["Gießen & Status", "Alle Pflanzen & Infos"])
+# --- NEU: ERINNERUNGS-BOX ---
+query_warnung = """
+SELECT p.name_deutsch 
+FROM pflanzen p
+JOIN giess_historie g ON p.id = g.pflanze_id
+GROUP BY p.id, p.name_deutsch, p.giessintervall_tage
+HAVING (MAX(g.datum_gegossen) + (p.giessintervall_tage || ' days')::interval)::date <= CURRENT_DATE;
+"""
+df_warnung = pd.read_sql(query_warnung, conn)
 
-with tab1:
-    st.subheader("Fällige Pflanzen")
-    # SQL für Fälligkeit
-    query = """
-    SELECT p.name_deutsch, 
-           MAX(g.datum_gegossen) as letztes_giessen,
-           (MAX(g.datum_gegossen) + (p.giessintervall_tage || ' days')::interval)::date AS faellig_am
-    FROM pflanzen p
-    JOIN giess_historie g ON p.id = g.pflanze_id
-    GROUP BY p.id, p.name_deutsch, p.giessintervall_tage
-    ORDER BY faellig_am ASC;
-    """
-    df_status = pd.read_sql(query, conn)
-    st.dataframe(df_status, use_container_width=True)
-
+if not df_warnung.empty:
+    st.error(f"⚠️ Achtung! Diese Pflanzen müssen dringend gegossen werden: {', '.join(df_warnung['name_deutsch'].tolist())}")
+else:
+    st.success("✅ Alles im grünen Bereich – keine Pflanze braucht aktuell Wasser.")
     # Gießen-Funktion für mehrere Pflanzen
     st.subheader("Gießvorgang erfassen")
     pflanzen_liste = pd.read_sql("SELECT id, name_deutsch FROM pflanzen", conn)
