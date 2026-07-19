@@ -48,10 +48,16 @@ with tab1:
             p_id = pflanzen_liste[pflanzen_liste['name_deutsch'] == name]['id'].iloc[0]
             conn.cursor().execute("INSERT INTO giess_historie (pflanze_id, datum_gegossen) VALUES (%s, CURRENT_DATE)", (int(p_id),))
             conn.commit()
-        st.success(f"Gieß-Historie aktualisiert für: {', '.join(auswahl)}")
+        st.success(f"Gieß-Historie aktualisiert!")
         st.rerun()
 
 with tab2:
     st.subheader("Alle Pflanzen im Überblick")
-    df_alle = pd.read_sql("SELECT name_deutsch, name_botanisch, standort_ideal, vermehrung FROM pflanzen", conn)
-    st.table(df_alle)
+    # Hier werden jetzt alle deine neuen Spalten abgefragt
+    query_alle = """
+    SELECT name_deutsch, name_botanisch, standort_ideal, duengen, umtopfen, 
+           vertraegt_staunaesse, vertraegt_trockenheit, notizen 
+    FROM pflanzen
+    """
+    df_alle = pd.read_sql(query_alle, conn)
+    st.dataframe(df_alle, use_container_width=True)
