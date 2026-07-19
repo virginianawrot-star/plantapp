@@ -7,7 +7,7 @@ st.title("🌱 Mein Pflanzen-Dashboard")
 
 conn = psycopg2.connect(st.secrets["DATABASE_URL"])
 
-# 1. Warnung oben
+# 1. Warnung oben (Erinnerung)
 query_warnung = """
 SELECT p.name_deutsch 
 FROM pflanzen p
@@ -27,6 +27,7 @@ tab1, tab2 = st.tabs(["Gießen & Status", "Alle Pflanzen & Infos"])
 
 with tab1:
     st.subheader("Fällige Pflanzen")
+    # Tabelle sortiert nach Fälligkeitsdatum
     query = """
     SELECT p.name_deutsch, 
            MAX(g.datum_gegossen) as letztes_giessen,
@@ -48,16 +49,18 @@ with tab1:
             p_id = pflanzen_liste[pflanzen_liste['name_deutsch'] == name]['id'].iloc[0]
             conn.cursor().execute("INSERT INTO giess_historie (pflanze_id, datum_gegossen) VALUES (%s, CURRENT_DATE)", (int(p_id),))
             conn.commit()
-        st.success(f"Gieß-Historie aktualisiert!")
+        st.success(f"Gieß-Historie wurde für {len(auswahl)} Pflanzen aktualisiert!")
         st.rerun()
 
 with tab2:
     st.subheader("Alle Pflanzen im Überblick")
-    # Hier ist jetzt 'giessintervall_tage' mit dabei!
+    # Vollständige Tabelle mit allen Infos
     query_alle = """
     SELECT name_deutsch, name_botanisch, giessintervall_tage, standort_ideal, duengen, 
            umtopfen, vertraegt_staunaesse, vertraegt_trockenheit, notizen 
     FROM pflanzen
+    ORDER BY name_deutsch ASC
     """
     df_alle = pd.read_sql(query_alle, conn)
+    # Mit st.dataframe kannst du in der App sortieren und suchen
     st.dataframe(df_alle, use_container_width=True)
