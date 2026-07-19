@@ -2,27 +2,42 @@ import streamlit as st
 import psycopg2
 import pandas as pd
 
-# Verbindung zu Neon
-def get_connection():
-    return psycopg2.connect(st.secrets["DATABASE_URL"])
+st.set_page_config(layout="wide") # App nutzt die ganze Bildschirmbreite
+st.title("🌱 Mein Pflanzen-Dashboard")
 
-st.title("🌱 Mein Pflanzen-Tracker")
+conn = psycopg2.connect(st.secrets["DATABASE_URL"])
 
-conn = get_connection()
-# Pflanzen laden
-df = pd.read_sql("SELECT id, name_deutsch FROM pflanzen", conn)
+# 1. Registerkarten erstellen
+tab1, tab2 = st.tabs(["Gießen & Status", "Alle Pflanzen & Infos"])
 
-# Auswahl-Box
-pflanze_id = st.selectbox("Welche Pflanze hast du gegossen?", options=df['id'], format_func=lambda x: df[df['id'] == x]['name_deutsch'].values[0])
+with tab1:
+    st.subheader("Fällige Pflanzen")
+    # SQL für Fälligkeit
+    query = """
+    SELECT p.name_deutsch, 
+           MAX(g.datum_gegossen) as letztes_giessen,
+           (MAX(g.datum_gegossen) + (p.giessintervall_tage || ' days')::interval)::date AS faellig_am
+    FROM pflanzen p
+    JOIN giess_historie g ON p.id = g.pflanze_id
+    GROUP BY p.id, p.name_deutsch, p.giessintervall_tage
+    ORDER BY faellig_am ASC;
+    """
+    df_status = pd.read_sql(query, conn)
+    st.dataframe(df_status, use_container_width=True)
 
-if st.button("Jetzt gegossen!"):
-    cur = conn.cursor()
-    cur.execute("INSERT INTO giess_historie (pflanze_id, datum_gegossen) VALUES (%s, CURRENT_DATE)", (int(pflanze_id),))
-    conn.commit()
-    st.success("Erledigt! Gieß-Historie wurde aktualisiert.")
+    # Gießen-Funktion für mehrere Pflanzen
+    st.subheader("Gießvorgang erfassen")
+    pflanzen_liste = pd.read_sql("SELECT id, name_deutsch FROM pflanzen", conn)
+    auswahl = st.multiselect("Welche Pflanzen hast du heute gegossen?", pflanzen_liste['name_deutsch'])
+    
+    if st.button("Ausgewählte Pflanzen als gegossen markieren"):
+        for name in auswahl:
+            p_id = pflanzen_liste[pflanzen_liste['name_deutsch'] == name]['id'].iloc[0]
+            conn.cursor().execute("INSERT INTO giess_historie (pflanze_id, datum_gegossen) VALUES (%s, CURRENT_DATE)", (int(p_id),))
+            conn.commit()
+        st.success(f"Gieß-Historie aktualisiert für: {', '.join(auswahl)}")
 
-# Anzeige der Historie
-st.subheader("Letzte Gießvorgänge")
-hist = pd.read_sql("SELECT p.name_deutsch, g.datum_gegossen FROM giess_historie g JOIN pflanzen p ON g.pflanze_id = p.id ORDER BY g.datum_gegossen DESC LIMIT 5", conn)
-st.table(hist)
-
+with tab2:
+    st.subheader("Alle Pflanzen im Überblick")
+    df_alle = pd.read_sql("SELECT name_deutsch, name_botanisch, standort_ideal, vermehrung FROM pflanzen", conn)
+    st.table(df_alle)
