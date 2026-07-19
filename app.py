@@ -53,10 +53,10 @@ with tab1:
 
 with tab2:
     st.subheader("Alle Pflanzen im Überblick")
-    # Hier werden jetzt alle deine neuen Spalten abgefragt
+    # Hier ist jetzt 'giessintervall_tage' mit dabei!
     query_alle = """
-    SELECT name_deutsch, name_botanisch, standort_ideal, duengen, umtopfen, 
-           vertraegt_staunaesse, vertraegt_trockenheit, notizen 
+    SELECT name_deutsch, name_botanisch, giessintervall_tage, standort_ideal, duengen, 
+           umtopfen, vertraegt_staunaesse, vertraegt_trockenheit, notizen 
     FROM pflanzen
     """
     df_alle = pd.read_sql(query_alle, conn)
