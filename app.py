@@ -7,20 +7,29 @@ st.title("🌱 Mein Pflanzen-Dashboard")
 
 conn = psycopg2.connect(st.secrets["DATABASE_URL"])
 
-# --- TAB 1: GIESSEN ---
+# Tabs erstellen
 tab1, tab2, tab3 = st.tabs(["Gießen", "Düngen", "Alle Infos"])
 
+# --- TAB 1: GIESSEN ---
 with tab1:
     st.subheader("Gieß-Status")
     
-    # Der Hitze-Regler
-    hitze_level = st.select_slider("Wie ist das Wetter heute?", 
-                                   options=["Kühl", "Normal", "Heiß"], 
-                                   value="Normal")
+    # NEU: Temperatur-Slider von 0 bis 40 Grad
+    temp = st.slider("Aktuelle Außentemperatur (°C)", 0, 40, 20)
     
-    # Logik: Heiß = Intervall wird um 2 Tage verkürzt
-    abzug = 2 if hitze_level == "Heiß" else 0
-    
+    # Logik: 
+    # > 28°C: 3 Tage früher gießen
+    # > 22°C: 1 Tag früher gießen
+    # < 15°C: 2 Tage später gießen (Kühlung)
+    if temp > 28:
+        abzug = 3
+    elif temp > 22:
+        abzug = 1
+    elif temp < 15:
+        abzug = -2
+    else:
+        abzug = 0
+        
     query_giessen = f"""
     SELECT p.name_deutsch, 
            MAX(g.datum_gegossen) as zuletzt_giessen,
@@ -32,12 +41,12 @@ with tab1:
     """
     df_giessen = pd.read_sql(query_giessen, conn)
     
-    # Warnung nur wenn fällig
+    # Warnung wenn faellig_am <= heute
     fällige_pflanzen = df_giessen[df_giessen['faellig_am'] <= pd.to_datetime('today').date()]
     if not fällige_pflanzen.empty:
-        st.error(f"⚠️ Gieß-Alarm: {', '.join(fällige_pflanzen['name_deutsch'].tolist())}")
+        st.error(f"⚠️ Gieß-Alarm (wegen {temp}°C): {', '.join(fällige_pflanzen['name_deutsch'].tolist())}")
     else:
-        st.success("✅ Alles bestens!")
+        st.success(f"✅ Alles bestens bei {temp}°C!")
         
     st.dataframe(df_giessen, use_container_width=True)
 
