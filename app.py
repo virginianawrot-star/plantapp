@@ -7,7 +7,22 @@ st.title("🌱 Mein Pflanzen-Dashboard")
 
 conn = psycopg2.connect(st.secrets["DATABASE_URL"])
 
-# Tabs erstellen
+# 1. Warnung oben (Erinnerung)
+query_warnung = """
+SELECT p.name_deutsch 
+FROM pflanzen p
+JOIN giess_historie g ON p.id = g.pflanze_id
+GROUP BY p.id, p.name_deutsch, p.giessintervall_tage
+HAVING (MAX(g.datum_gegossen) + (p.giessintervall_tage || ' days')::interval)::date <= CURRENT_DATE;
+"""
+df_warnung = pd.read_sql(query_warnung, conn)
+
+if not df_warnung.empty:
+    st.error(f"⚠️ Achtung! Diese Pflanzen müssen dringend gegossen werden: {', '.join(df_warnung['name_deutsch'].tolist())}")
+else:
+    st.success("✅ Alles im grünen Bereich – keine Pflanze braucht aktuell Wasser.")
+
+# 2. Tabs erstellen
 tab1, tab2, tab3 = st.tabs(["Gießen", "Düngen", "Alle Infos"])
 
 # --- TAB 1: GIESSEN ---
@@ -39,6 +54,16 @@ with tab1:
 # --- TAB 2: DÜNGEN ---
 with tab2:
     st.subheader("Dünge-Status")
+    query_duenge_status = """
+    SELECT p.name_deutsch, MAX(d.datum_geduengt) as zuletzt_geduengt
+    FROM pflanzen p
+    LEFT JOIN duenge_historie d ON p.id = d.pflanze_id
+    GROUP BY p.name_deutsch
+    ORDER BY zuletzt_geduengt DESC;
+    """
+    df_duenge = pd.read_sql(query_duenge_status, conn)
+    st.dataframe(df_duenge, use_container_width=True)
+
     auswahl_duengen = st.multiselect("Welche Pflanzen hast du heute gedüngt?", pflanzen_liste['name_deutsch'], key="d")
     
     if st.button("Ausgewählte als gedüngt markieren"):
@@ -49,9 +74,9 @@ with tab2:
         st.success("Dünge-Historie aktualisiert!")
         st.rerun()
 
-# --- TAB 3: ALLE INFOS MIT GROSSEN BUTTONS ---
+# --- TAB 3: ALLE INFOS ---
 with tab3:
-    st.subheader("Filter")
+    st.subheader("Filter & Details")
     col1, col2 = st.columns(2)
     
     if "filter" not in st.session_state: st.session_state.filter = "Alle"
